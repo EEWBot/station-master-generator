@@ -186,6 +186,22 @@ fn building_twice_from_the_same_inputs_is_byte_identical() {
     );
 }
 
+/// station.json is only held to the *shape* of its codes, so a code repeated
+/// within one file is stopped at the entrance to `append` instead.
+///
+/// This is the init path on purpose: a duplicate here has no earlier master to be
+/// checked against, and an exactly repeated entry also slips past the final
+/// validation, so this is the only place it is ever caught.
+#[test]
+fn a_duplicate_station_code_is_rejected() {
+    let snapshot = station_snapshot("station_duplicate_code.json");
+
+    let error = append(None, &snapshot, stamp()).unwrap_err().to_string();
+    assert!(error.contains("duplicate station code"), "{error}");
+    assert!(error.contains("0999100"), "{error}");
+    assert!(error.contains("entries 1 and 2"), "{error}");
+}
+
 #[test]
 fn resupplying_a_recorded_release_is_an_error() {
     let (first, _) = apply(None, &station_snapshot("station_min.json"));

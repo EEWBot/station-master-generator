@@ -13,6 +13,10 @@
 //! represented by its *absence*. Inserting or rewriting a release inside that
 //! representation would silently re-date every state that follows it, so a release
 //! that is not strictly newer is rejected rather than merged.
+//!
+//! Both rules assume the snapshot is self-consistent, so that much is checked
+//! first: whatever adapter produced it, a snapshot may name each station code
+//! only once.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -67,6 +71,7 @@ pub fn append(
     snapshot: &Snapshot,
     generated_at: DateTime<FixedOffset>,
 ) -> Result<(Master, AppendReport)> {
+    check_snapshot(snapshot)?;
     if let Some(previous) = previous {
         check_can_append(previous, snapshot)?;
     }
@@ -101,6 +106,34 @@ pub fn append(
 
     let report = outcome.into_report(&master, snapshot, t);
     Ok((master, report))
+}
+
+/// Hold a snapshot to what one release can honestly say, before any of it is
+/// believed.
+///
+/// A snapshot speaks about each station once. [`assign_indices`] collects unseen
+/// codes into a set, so a code listed twice quietly becomes one index while
+/// `stations_existing` is still counted against the item total — the report then
+/// claims a station already existed that never did. Identical duplicates end
+/// there, silently; conflicting ones push two revisions at the same instant and
+/// are caught only by `validate`, one layer too late. Both are a broken input, so
+/// the input is refused rather than reconciled.
+fn check_snapshot(snapshot: &Snapshot) -> Result<()> {
+    let mut seen: HashMap<&str, usize> = HashMap::with_capacity(snapshot.stations.len());
+    for (index, station) in snapshot.stations.iter().enumerate() {
+        if let Some(first) = seen.insert(station.code.as_str(), index) {
+            bail!(
+                "release {}: duplicate station code {:?} (entries {} and {})\n  \
+                 a snapshot describes each station once; two entries for one code \
+                 cannot both be recorded at the same instant",
+                snapshot.release_id,
+                station.code,
+                first + 1,
+                index + 1
+            );
+        }
+    }
+    Ok(())
 }
 
 fn check_can_append(previous: &Master, snapshot: &Snapshot) -> Result<()> {
