@@ -229,4 +229,13 @@ mod tests {
         let err = parse(&text, &Overrides::default()).unwrap_err().to_string();
         assert!(err.contains("malformed latitude"), "{err}");
     }
+
+    #[test]
+    fn a_blank_latitude_does_not_excuse_a_malformed_longitude() {
+        let text = MINIMAL
+            .replace(r#""latitude": "35.1234""#, r#""latitude": """#)
+            .replace(r#""longitude": "135.6789""#, r#""longitude": "135.xxxx""#);
+        let err = parse(&text, &Overrides::default()).unwrap_err().to_string();
+        assert!(err.contains("malformed longitude"), "{err}");
+    }
 }

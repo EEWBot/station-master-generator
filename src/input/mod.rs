@@ -99,6 +99,22 @@ impl RawCoordinate {
     }
 }
 
+/// Parse one axis: an empty coordinate is unresolved, a written one is a claim
+/// that has to hold.
+///
+/// Each axis is checked on its own so a blank companion cannot excuse a corrupt
+/// value: `{"latitude": "", "longitude": "135.xxxx"}` is a broken feed, not an
+/// unresolved station.
+fn parse_axis(text: &str, axis: &str, subject: &str) -> anyhow::Result<Option<f64>> {
+    if text.is_empty() {
+        return Ok(None);
+    }
+    let value = text
+        .parse()
+        .map_err(|_| anyhow::anyhow!("{subject}: malformed {axis} {text:?}"))?;
+    Ok(Some(value))
+}
+
 /// Parse a coordinate pair, recovering the precision from how it was written.
 ///
 /// The pair is only as well determined as its coarser axis, so the two decimal
@@ -108,7 +124,9 @@ impl RawCoordinate {
 ///
 /// A missing coordinate is unresolved; a present but unparsable one is a corrupt
 /// feed and must not be quietly turned into `null`, or a broken export could erase
-/// the coordinate set one release at a time.
+/// the coordinate set one release at a time. Each axis is therefore validated
+/// before the pair is judged incomplete, so a blank latitude cannot smuggle a
+/// malformed longitude through as an honest `null`.
 pub(crate) fn parse_coordinate_pair(
     latitude: Option<&RawCoordinate>,
     longitude: Option<&RawCoordinate>,
@@ -116,16 +134,13 @@ pub(crate) fn parse_coordinate_pair(
 ) -> anyhow::Result<Option<Location>> {
     let lat_text = latitude.map(RawCoordinate::as_written).unwrap_or_default();
     let lon_text = longitude.map(RawCoordinate::as_written).unwrap_or_default();
-    if lat_text.is_empty() || lon_text.is_empty() {
-        return Ok(None);
-    }
 
-    let latitude: f64 = lat_text
-        .parse()
-        .map_err(|_| anyhow::anyhow!("{subject}: malformed latitude {lat_text:?}"))?;
-    let longitude: f64 = lon_text
-        .parse()
-        .map_err(|_| anyhow::anyhow!("{subject}: malformed longitude {lon_text:?}"))?;
+    let latitude = parse_axis(&lat_text, "latitude", subject)?;
+    let longitude = parse_axis(&lon_text, "longitude", subject)?;
+
+    let (Some(latitude), Some(longitude)) = (latitude, longitude) else {
+        return Ok(None);
+    };
 
     Ok(Some(Location {
         latitude,
@@ -198,12 +213,47 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+        assert!(
+            parse_coordinate_pair(Some(&text("35.12")), Some(&text("")), "s")
+                .unwrap()
+                .is_none()
+        );
+        // Whitespace is trimmed away, so a padded blank is still a blank.
+        assert!(
+            parse_coordinate_pair(Some(&text("   ")), Some(&text("135.68")), "s")
+                .unwrap()
+                .is_none()
+        );
         assert!(parse_coordinate_pair(None, None, "s").unwrap().is_none());
     }
 
     #[test]
     fn a_malformed_coordinate_is_an_error() {
         let error = parse_coordinate_pair(Some(&text("35.xxxx")), Some(&text("135.68")), "s")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("malformed latitude"), "{error}");
+    }
+
+    #[test]
+    fn a_malformed_longitude_is_an_error() {
+        let error = parse_coordinate_pair(Some(&text("35.12")), Some(&text("135.xxxx")), "s")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("malformed longitude"), "{error}");
+    }
+
+    #[test]
+    fn a_blank_axis_does_not_excuse_a_malformed_companion() {
+        // A blank latitude used to short-circuit the whole pair, so a corrupt
+        // longitude next to it passed as an honest `null` and the coordinate
+        // quietly disappeared from the release.
+        let error = parse_coordinate_pair(Some(&text("")), Some(&text("135.xxxx")), "s")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("malformed longitude"), "{error}");
+
+        let error = parse_coordinate_pair(Some(&text("35.xxxx")), Some(&text("")), "s")
             .unwrap_err()
             .to_string();
         assert!(error.contains("malformed latitude"), "{error}");
