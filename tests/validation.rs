@@ -64,6 +64,31 @@ fn duplicate_codes_are_rejected() {
     assert!(text.contains("appears at index"), "{text}");
 }
 
+/// The damage this check exists for: a code that lost its leading zero is
+/// unique, well formed as a string, and names a station that does not exist —
+/// while holding an index that can never be handed back.
+#[test]
+fn a_malformed_station_code_is_rejected() {
+    let mut master = master();
+    master.stations[0].code = "999100".to_owned();
+
+    let text = message(&validate(&master, None).unwrap_err());
+    assert!(text.contains("not 7 ASCII digits"), "{text}");
+    assert!(text.contains("leading zero"), "{text}");
+}
+
+#[test]
+fn a_malformed_city_code_in_a_revision_is_rejected() {
+    let mut master = master();
+    let city = master.stations[0].metadata[0].city.as_mut().unwrap();
+    city.code = "999100".to_owned();
+
+    let text = message(&validate(&master, None).unwrap_err());
+    assert!(text.contains("city code"), "{text}");
+    // The revision has to be named, or there is no way to find it in a history.
+    assert!(text.contains("revision effective"), "{text}");
+}
+
 #[test]
 fn appending_a_station_is_accepted() {
     let before = master();

@@ -12,6 +12,7 @@
 
 pub mod append;
 pub mod cli;
+pub mod code;
 pub mod input;
 pub mod kana;
 pub mod location;

@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 use std::fmt;
 
+use crate::code::CodeShape;
 use crate::model::{Master, SCHEMA_VERSION, Scope};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,6 +48,7 @@ pub fn validate(master: &Master, previous: Option<&Master>) -> Result<(), Valida
     }
 
     check_codes_unique(master, &mut errors);
+    check_code_shapes(master, &mut errors);
     check_index_mapping_preserved(master, previous, &mut errors);
     check_releases(master, &mut errors);
     check_station_histories(master, &mut errors);
@@ -70,6 +72,49 @@ fn check_codes_unique(master: &Master, errors: &mut Vec<ValidationError>) {
                 "station code {:?} appears at index {first} and index {index}",
                 station.code
             )));
+        }
+    }
+}
+
+/// Codes must have the shape their code system gives them.
+///
+/// Uniqueness alone is not enough. A station code that lost a leading zero on the
+/// way in is unique, well formed as a string, and completely wrong: it names a
+/// station that does not exist and holds an index that can never be reclaimed.
+/// The same damage to a city code is quieter but still costly, because
+/// `append::build_revision` carries a location forward only while the city code
+/// matches, so a mangled one silently drops the coordinate it should inherit.
+///
+/// A master that fails this check cannot be repaired by this tool — there is no
+/// repair mode, by design — but refusing to extend it is the point: every index
+/// it hands out afterwards rests on identities it can no longer vouch for.
+fn check_code_shapes(master: &Master, errors: &mut Vec<ValidationError>) {
+    for (index, station) in master.stations.iter().enumerate() {
+        if !CodeShape::Point.accepts(&station.code) {
+            errors.push(error(format!(
+                "index {index}: {}",
+                CodeShape::Point.describe_violation(&station.code)
+            )));
+        }
+
+        for revision in &station.metadata {
+            let mut check = |shape: CodeShape, code: &str| {
+                if !shape.accepts(code) {
+                    errors.push(error(format!(
+                        "station {:?} (index {index}) has, in the revision effective {}, {}",
+                        station.code,
+                        revision.effective_from.to_rfc3339(),
+                        shape.describe_violation(code)
+                    )));
+                }
+            };
+
+            if let Some(region) = &revision.region {
+                check(CodeShape::Region, &region.code);
+            }
+            if let Some(city) = &revision.city {
+                check(CodeShape::City, &city.code);
+            }
         }
     }
 }

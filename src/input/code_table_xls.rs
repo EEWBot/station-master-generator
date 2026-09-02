@@ -18,6 +18,7 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use calamine::{Data, Range, Reader, Xls};
 
+use crate::code::CodeShape;
 use crate::kana;
 
 /// Sheet 24 holds three code systems side by side; these are their column offsets.
@@ -70,35 +71,40 @@ pub fn parse_range(range: &Range<Data>) -> Result<Vec<CodeTableRow>> {
     // Walk to the very end of the range. Stopping at the first row without a point
     // code would silently discard everything past a stray note or spacer row.
     for row in FIRST_DATA_ROW..=last_row {
-        let cells: Vec<String> = (0..COLUMNS)
-            .map(|column| cell_text(range.get_value((row, column)), row, column))
+        let cells: Vec<Cell> = (0..COLUMNS)
+            .map(|column| read_cell(range.get_value((row, column)), row, column))
             .collect::<Result<_>>()?;
 
-        if cells.iter().all(String::is_empty) {
+        if cells.iter().all(|cell| cell.text.is_empty()) {
             continue;
         }
 
-        let point_code = cells[COL_POINT_CODE as usize].clone();
+        let point_code = cells[COL_POINT_CODE as usize].text.clone();
         if point_code.is_empty() {
+            let texts: Vec<&str> = cells.iter().map(|cell| cell.text.as_str()).collect();
             bail!(
                 "sheet {SHEET_NAME} row {}: PointSeismicIntensity code is empty but the row \
                  carries other values ({:?}); refusing to guess",
                 row + 1,
-                cells
+                texts
             );
         }
+
+        check_code(&cells, COL_REGION_CODE, row, CodeShape::Region)?;
+        check_code(&cells, COL_CITY_CODE, row, CodeShape::City)?;
+        check_code(&cells, COL_POINT_CODE, row, CodeShape::Point)?;
 
         rows.push(CodeTableRow {
             region_code: require(&cells, COL_REGION_CODE, row, "region code")?,
             region_name: require(&cells, COL_REGION_NAME, row, "region name")?,
             // Readings are spelled in hiragana here and in katakana everywhere else.
-            region_kana: optional_kana(&cells[COL_REGION_KANA as usize]),
+            region_kana: optional_kana(&cells[COL_REGION_KANA as usize].text),
             city_code: require(&cells, COL_CITY_CODE, row, "city code")?,
             city_name: require(&cells, COL_CITY_NAME, row, "city name")?,
-            city_kana: optional_kana(&cells[COL_CITY_KANA as usize]),
+            city_kana: optional_kana(&cells[COL_CITY_KANA as usize].text),
             point_code,
             point_name: require(&cells, COL_POINT_NAME, row, "PointSeismicIntensity name")?,
-            point_kana: optional_kana(&cells[COL_POINT_KANA as usize]),
+            point_kana: optional_kana(&cells[COL_POINT_KANA as usize].text),
         });
     }
 
@@ -106,12 +112,52 @@ pub fn parse_range(range: &Range<Data>) -> Result<Vec<CodeTableRow>> {
     Ok(rows)
 }
 
-fn require(cells: &[String], column: u32, row: u32, what: &str) -> Result<String> {
-    let value = &cells[column as usize];
+fn require(cells: &[Cell], column: u32, row: u32, what: &str) -> Result<String> {
+    let value = &cells[column as usize].text;
     if value.is_empty() {
         bail!("sheet {SHEET_NAME} row {}: {what} is empty", row + 1);
     }
     Ok(value.clone())
+}
+
+/// Hold one code column to its fixed shape.
+///
+/// The numeric test comes first because it names the cause rather than the
+/// symptom. City and PointSeismicIntensity codes are seven digits with a leading
+/// zero, so a cell that arrives as a *number* has already lost that zero: by the
+/// time it is read back, `"0123500"` has become `"123500"`, which is
+/// indistinguishable from a genuine code this tool has never seen. Appending it
+/// would spend a permanent index on a station that does not exist, so the
+/// workbook has to be repaired rather than the value guessed at.
+fn check_code(cells: &[Cell], column: u32, row: u32, shape: CodeShape) -> Result<()> {
+    let cell = &cells[column as usize];
+
+    // An absent code is a different complaint, and `require` words it better.
+    if cell.text.is_empty() {
+        return Ok(());
+    }
+
+    if cell.numeric && matches!(shape, CodeShape::City | CodeShape::Point) {
+        bail!(
+            "sheet {SHEET_NAME} row {} column {}: {} is stored as a number ({:?}); this column \
+             must be text, because a leading zero lost to a numeric cell cannot be recovered \
+             and the value would read as a different station",
+            row + 1,
+            column + 1,
+            shape.label(),
+            cell.text
+        );
+    }
+
+    if !shape.accepts(&cell.text) {
+        bail!(
+            "sheet {SHEET_NAME} row {}: {}",
+            row + 1,
+            shape.describe_violation(&cell.text)
+        );
+    }
+
+    Ok(())
 }
 
 fn optional_kana(value: &str) -> Option<String> {
@@ -122,11 +168,26 @@ fn optional_kana(value: &str) -> Option<String> {
     }
 }
 
+/// One cell as the code table means it, together with whether the workbook held
+/// it as a number.
+///
+/// The provenance has to travel with the text. `"0999100"` read out of a numeric
+/// cell is already `"999100"`, and by then nothing about the string says it was
+/// ever anything else; this is the only place that can still tell.
+#[derive(Debug, Clone)]
+struct Cell {
+    text: String,
+    numeric: bool,
+}
+
 /// Render a cell as the string the code table means.
 ///
-/// Region codes are stored as numbers, so `100.0` has to come back as `"900"`;
-/// city and point codes are stored as text and keep their leading zeros.
-fn cell_text(cell: Option<&Data>, row: u32, column: u32) -> Result<String> {
+/// Region codes are stored as numbers, so `900.0` has to come back as `"900"`.
+/// City and point codes are stored as text and keep their leading zeros; the same
+/// coercion is applied to them only so that [`check_code`] has a value to name in
+/// its complaint, and it rejects them on `numeric` before the text is believed.
+fn read_cell(cell: Option<&Data>, row: u32, column: u32) -> Result<Cell> {
+    let numeric = matches!(cell, Some(Data::Int(_) | Data::Float(_)));
     let text = match cell {
         None | Some(Data::Empty) => String::new(),
         Some(Data::String(s)) => s.trim().to_owned(),
@@ -145,7 +206,7 @@ fn cell_text(cell: Option<&Data>, row: u32, column: u32) -> Result<String> {
             column + 1
         ),
     };
-    Ok(text)
+    Ok(Cell { text, numeric })
 }
 
 /// Both the code and the name have to be unique: the code is the station identity
@@ -293,6 +354,67 @@ mod tests {
         rows.push(data_row("", "甲野市山川"));
         let err = parse_range(&range(&rows)).unwrap_err().to_string();
         assert!(err.contains("code is empty"), "{err}");
+    }
+
+    /// The trap this module's shape checks exist for.
+    ///
+    /// A workbook re-saved with the code column as a number turns `"0999100"`
+    /// into `999100.0`, and a permissive reader would hand back `"999100"` — a
+    /// station code that has never existed, and one that would be given a
+    /// permanent index of its own.
+    #[test]
+    fn a_numeric_point_code_is_rejected() {
+        let mut rows = header();
+        let mut row = data_row("0999100", "甲野市山川");
+        row[6] = Data::Float(999_100.0);
+        rows.push(row);
+
+        let err = parse_range(&range(&rows)).unwrap_err().to_string();
+        assert!(err.contains("station code is stored as a number"), "{err}");
+        assert!(err.contains("read as a different station"), "{err}");
+    }
+
+    #[test]
+    fn a_numeric_city_code_is_rejected() {
+        let mut rows = header();
+        let mut row = data_row("0999100", "甲野市山川");
+        row[3] = Data::Int(999_100);
+        rows.push(row);
+
+        let err = parse_range(&range(&rows)).unwrap_err().to_string();
+        assert!(err.contains("city code is stored as a number"), "{err}");
+    }
+
+    /// Even as text, a code of the wrong width is a different code.
+    #[test]
+    fn a_short_point_code_is_rejected() {
+        let mut rows = header();
+        rows.push(data_row("999100", "甲野市山川"));
+
+        let err = parse_range(&range(&rows)).unwrap_err().to_string();
+        assert!(err.contains("not 7 ASCII digits"), "{err}");
+        assert!(err.contains("leading zero"), "{err}");
+    }
+
+    #[test]
+    fn a_non_numeric_point_code_is_rejected() {
+        let mut rows = header();
+        rows.push(data_row("09991-0", "甲野市山川"));
+
+        let err = parse_range(&range(&rows)).unwrap_err().to_string();
+        assert!(err.contains("not 7 ASCII digits"), "{err}");
+    }
+
+    #[test]
+    fn a_region_code_of_the_wrong_width_is_rejected() {
+        let mut rows = header();
+        let mut row = data_row("0999100", "甲野市山川");
+        row[0] = Data::Float(90.0);
+        rows.push(row);
+
+        let err = parse_range(&range(&rows)).unwrap_err().to_string();
+        assert!(err.contains("region code"), "{err}");
+        assert!(err.contains("not 3 ASCII digits"), "{err}");
     }
 
     #[test]

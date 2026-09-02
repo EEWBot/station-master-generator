@@ -7,6 +7,7 @@ use chrono::{DateTime, FixedOffset};
 use serde::Deserialize;
 
 use super::{RawCoordinate, Snapshot, SnapshotStation, StationMetadata, parse_coordinate_pair};
+use crate::code::CodeShape;
 use crate::model::{Area, Provider, SourceKind};
 
 #[derive(Debug, Deserialize)]
@@ -68,6 +69,14 @@ pub fn parse(text: &str, overrides: &Overrides) -> Result<Snapshot> {
 
     let mut stations = Vec::with_capacity(raw.items.len());
     for item in raw.items {
+        check_code(&item.code, CodeShape::Point, &item.code)?;
+        if let Some(region) = &item.region {
+            check_code(&region.code, CodeShape::Region, &item.code)?;
+        }
+        if let Some(city) = &item.city {
+            check_code(&city.code, CodeShape::City, &item.code)?;
+        }
+
         let active = parse_status(&item.status)
             .ok_or_else(|| anyhow!("station {}: unknown status {:?}", item.code, item.status))?;
         let location = parse_coordinate_pair(
@@ -103,6 +112,20 @@ pub fn parse(text: &str, overrides: &Overrides) -> Result<Snapshot> {
         complete_scopes: Vec::new(),
         warnings: Vec::new(),
     })
+}
+
+/// Hold one code to its fixed shape.
+///
+/// There is no numeric hazard on this side: every code field is typed `String`,
+/// so serde rejects a bare JSON number outright rather than rounding a leading
+/// zero away. What is left to catch is a code that was already damaged before it
+/// reached the file, which would otherwise be appended as a station in its own
+/// right and given a permanent index.
+fn check_code(value: &str, shape: CodeShape, station: &str) -> Result<()> {
+    if !shape.accepts(value) {
+        bail!("station {station}: {}", shape.describe_violation(value));
+    }
+    Ok(())
 }
 
 fn convert_area(area: RawArea) -> Area {
@@ -214,6 +237,43 @@ mod tests {
         assert_eq!(parse_owner(Some("謎の組織")).0, Provider::Unknown);
         assert_eq!(parse_owner(None).0, Provider::Unknown);
         assert_eq!(parse_owner(Some("都道府県")).1.as_deref(), Some("都道府県"));
+    }
+
+    /// A code short of its leading zero is not a malformed record to skip past:
+    /// it is a station code that has never existed, and appending it would spend
+    /// a permanent index on it.
+    #[test]
+    fn a_malformed_station_code_is_rejected() {
+        let text = MINIMAL.replace(
+            r#""code": "0999100", "name""#,
+            r#""code": "999100", "name""#,
+        );
+        let err = parse(&text, &Overrides::default()).unwrap_err().to_string();
+        assert!(err.contains("station code"), "{err}");
+        assert!(err.contains("not 7 ASCII digits"), "{err}");
+        assert!(err.contains("leading zero"), "{err}");
+    }
+
+    #[test]
+    fn a_malformed_city_code_is_rejected() {
+        let text = MINIMAL.replace(
+            r#""city": {"code": "0999100""#,
+            r#""city": {"code": "999100""#,
+        );
+        let err = parse(&text, &Overrides::default()).unwrap_err().to_string();
+        assert!(err.contains("city code"), "{err}");
+        assert!(err.contains("not 7 ASCII digits"), "{err}");
+    }
+
+    #[test]
+    fn a_malformed_region_code_is_rejected() {
+        let text = MINIMAL.replace(
+            r#""region": {"code": "900""#,
+            r#""region": {"code": "9000""#,
+        );
+        let err = parse(&text, &Overrides::default()).unwrap_err().to_string();
+        assert!(err.contains("region code"), "{err}");
+        assert!(err.contains("not 3 ASCII digits"), "{err}");
     }
 
     #[test]
