@@ -1,3 +1,4 @@
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -228,25 +229,26 @@ fn read_master(path: &Path) -> Result<Master> {
     serde_json::from_str(&text).with_context(|| format!("parsing master at {}", path.display()))
 }
 
-/// Write through a temporary file so a failure part-way cannot truncate a master.
+/// Write the master, refusing a path that is already taken.
 ///
-/// The temporary lives beside the target, keeping the final move within one
-/// filesystem. `rename` replaces an existing file rather than the target being
-/// unlinked first, so there is no moment where the previous master is gone and
-/// the new one is not yet in place.
+/// The caller checks the path before doing any work, so this is the second layer:
+/// it closes the window between that check and this write, and it holds for any
+/// other caller that has not checked at all.
+///
+/// Nothing is staged through a temporary. The target is always a new file, so
+/// there is no master in place for an atomic move to protect, and a temporary
+/// named after the target would be the one file this tool wrote over without
+/// being asked.
 fn write_master(master: &Master, path: &Path) -> Result<()> {
     let mut text = serde_json::to_string_pretty(master).context("serializing master")?;
     text.push('\n');
 
-    let temporary = path.with_extension("tmp");
-    std::fs::write(&temporary, &text)
-        .with_context(|| format!("writing {}", temporary.display()))?;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .with_context(|| format!("creating master at {}", path.display()))?;
 
-    std::fs::rename(&temporary, path)
-        .inspect_err(|_| {
-            // Do not leave a stray temporary behind when the move fails.
-            let _ = std::fs::remove_file(&temporary);
-        })
-        .with_context(|| format!("moving {} into place", temporary.display()))?;
-    Ok(())
+    file.write_all(text.as_bytes())
+        .with_context(|| format!("writing master to {}", path.display()))
 }

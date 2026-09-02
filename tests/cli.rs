@@ -174,6 +174,24 @@ fn an_existing_output_is_never_overwritten() {
 }
 
 #[test]
+fn a_sibling_file_is_never_touched() {
+    let dir = workspace("sibling-untouched");
+    let master = dir.join("master.json");
+    let sibling = dir.join("master.tmp");
+
+    // The master used to be staged through a temporary named after the output,
+    // which destroyed whatever already held that name.
+    std::fs::write(&sibling, "not ours to overwrite\n").unwrap();
+
+    assert!(init_from_station_json(&master).status.success());
+    assert!(master.exists());
+    assert_eq!(
+        std::fs::read_to_string(&sibling).unwrap(),
+        "not ours to overwrite\n"
+    );
+}
+
+#[test]
 fn an_existing_report_is_never_overwritten() {
     let dir = workspace("no-report-overwrite");
     let master = dir.join("master.json");
