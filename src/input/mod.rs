@@ -103,8 +103,8 @@ impl RawCoordinate {
 ///
 /// The pair is only as well determined as its coarser axis, so the two decimal
 /// counts are combined by taking the larger cell. That also keeps a bare number
-/// such as `141.70499999999998` from claiming a precision its companion latitude
-/// `"42.42"` plainly does not have.
+/// such as `135.70499999999998` from claiming a precision its companion latitude
+/// `"35.42"` plainly does not have.
 ///
 /// A missing coordinate is unresolved; a present but unparsable one is a corrupt
 /// feed and must not be quietly turned into `null`, or a broken export could erase
@@ -138,7 +138,7 @@ pub(crate) fn parse_coordinate_pair(
 /// Count decimal places in a coordinate as written, to recover the precision the
 /// publisher actually committed to.
 ///
-/// `"43.17"` is a claim about two decimals; parsing it to `43.17_f64` first would
+/// `"35.12"` is a claim about two decimals; parsing it to `35.12_f64` first would
 /// lose exactly the fact we need.
 pub(crate) fn resolution_from_decimals(text: &str) -> f64 {
     let decimals = match text.split_once('.') {
@@ -162,15 +162,15 @@ mod tests {
 
     #[test]
     fn resolution_follows_written_precision() {
-        assert!((resolution_from_decimals("43.1714") - 0.0001).abs() < 1e-12);
-        assert!((resolution_from_decimals("43.17") - 0.01).abs() < 1e-12);
+        assert!((resolution_from_decimals("35.1234") - 0.0001).abs() < 1e-12);
+        assert!((resolution_from_decimals("35.12") - 0.01).abs() < 1e-12);
         assert!((resolution_from_decimals("43") - 1.0).abs() < 1e-12);
-        assert!((resolution_from_decimals("-141.3156") - 0.0001).abs() < 1e-12);
+        assert!((resolution_from_decimals("-135.6789") - 0.0001).abs() < 1e-12);
     }
 
     #[test]
     fn a_pair_is_only_as_precise_as_its_coarser_axis() {
-        let location = parse_coordinate_pair(Some(&text("43.1714")), Some(&text("141.32")), "s")
+        let location = parse_coordinate_pair(Some(&text("35.1234")), Some(&text("135.68")), "s")
             .unwrap()
             .unwrap();
         assert!((location.resolution_deg - 0.01).abs() < 1e-12);
@@ -181,20 +181,20 @@ mod tests {
         // The published feed quotes most coordinates but not all; a stray number
         // must not make the pair look far more precise than the latitude allows.
         let location = parse_coordinate_pair(
-            Some(&text("44.36")),
-            Some(&number(141.704_999_999_999_98)),
+            Some(&text("35.36")),
+            Some(&number(135.704_999_999_999_98)),
             "羽幌町南町",
         )
         .unwrap()
         .unwrap();
-        assert!((location.longitude - 141.705).abs() < 1e-9);
+        assert!((location.longitude - 135.705).abs() < 1e-9);
         assert!((location.resolution_deg - 0.01).abs() < 1e-12);
     }
 
     #[test]
     fn a_missing_coordinate_is_unresolved() {
         assert!(
-            parse_coordinate_pair(Some(&text("")), Some(&text("141.32")), "s")
+            parse_coordinate_pair(Some(&text("")), Some(&text("135.68")), "s")
                 .unwrap()
                 .is_none()
         );
@@ -203,7 +203,7 @@ mod tests {
 
     #[test]
     fn a_malformed_coordinate_is_an_error() {
-        let error = parse_coordinate_pair(Some(&text("43.xxxx")), Some(&text("141.32")), "s")
+        let error = parse_coordinate_pair(Some(&text("35.xxxx")), Some(&text("135.68")), "s")
             .unwrap_err()
             .to_string();
         assert!(error.contains("malformed latitude"), "{error}");

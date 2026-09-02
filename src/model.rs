@@ -86,8 +86,8 @@ pub struct Location {
     pub longitude: f64,
     /// Size of the quantization cell the coordinate was reported in.
     ///
-    /// `43.17` from a two-decimal source means "somewhere in [43.165, 43.175)",
-    /// not "exactly 43.17". See [`crate::location`].
+    /// `35.12` from a two-decimal source means "somewhere in [35.115, 35.125)",
+    /// not "exactly 35.12". See [`crate::location`].
     pub resolution_deg: f64,
 }
 

@@ -162,15 +162,15 @@ mod tests {
 
     fn row(point_code: &str, point_name: &str) -> CodeTableRow {
         CodeTableRow {
-            region_code: "100".to_owned(),
-            region_name: "石狩地方北部".to_owned(),
-            region_kana: Some("イシカリチホウホクブ".to_owned()),
-            city_code: "0123500".to_owned(),
-            city_name: "石狩市".to_owned(),
-            city_kana: Some("イシカリシ".to_owned()),
+            region_code: "900".to_owned(),
+            region_name: "甲野地方北部".to_owned(),
+            region_kana: Some("コウノチホウホクブ".to_owned()),
+            city_code: "0999100".to_owned(),
+            city_name: "甲野市".to_owned(),
+            city_kana: Some("コウノシ".to_owned()),
             point_code: point_code.to_owned(),
             point_name: point_name.to_owned(),
-            point_kana: Some("イシカリシハナカワ".to_owned()),
+            point_kana: Some("コウノシヤマカワ".to_owned()),
         }
     }
 
@@ -186,8 +186,8 @@ mod tests {
 
     #[test]
     fn joins_on_exact_name_and_declares_the_scope_complete() {
-        let table = [row("0123500", "石狩市花川")];
-        let json = r#"[{"lat":"43.17","lon":"141.32","name":"石狩市花川","affi":"0"}]"#;
+        let table = [row("0999100", "甲野市山川")];
+        let json = r#"[{"lat":"35.12","lon":"135.68","name":"甲野市山川","affi":"0"}]"#;
         let snapshot = snapshot(json, &table);
 
         assert_eq!(snapshot.complete_scopes, vec![Scope::PointSeismicIntensity]);
@@ -198,7 +198,7 @@ mod tests {
         assert_eq!(snapshot.stations[0].active, Some(true));
 
         let location = snapshot.stations[0].metadata.location.unwrap();
-        assert!((location.latitude - 43.17).abs() < 1e-12);
+        assert!((location.latitude - 35.12).abs() < 1e-12);
         assert!((location.resolution_deg - 0.01).abs() < 1e-12);
         assert_eq!(snapshot.stations[0].metadata.provider, Provider::Jma);
         assert!(snapshot.warnings.is_empty());
@@ -206,8 +206,8 @@ mod tests {
 
     #[test]
     fn a_failed_join_keeps_the_station_without_a_location() {
-        let table = [row("0123500", "石狩市花川")];
-        let json = r#"[{"lat":"43.17","lon":"141.32","name":"石狩市花川西","affi":"0"}]"#;
+        let table = [row("0999100", "甲野市山川")];
+        let json = r#"[{"lat":"35.12","lon":"135.68","name":"甲野市山川西","affi":"0"}]"#;
         let snapshot = snapshot(json, &table);
 
         assert_eq!(snapshot.stations.len(), 1);
@@ -221,10 +221,10 @@ mod tests {
 
     #[test]
     fn published_entries_without_a_code_are_dropped_with_a_warning() {
-        let table = [row("0123500", "石狩市花川")];
+        let table = [row("0999100", "甲野市山川")];
         let json = r#"[
-            {"lat":"43.17","lon":"141.32","name":"石狩市花川","affi":"0"},
-            {"lat":"43.28","lon":"141.42","name":"知らない観測点","affi":"1"}
+            {"lat":"35.12","lon":"135.68","name":"甲野市山川","affi":"0"},
+            {"lat":"35.28","lon":"135.42","name":"無名観測点","affi":"1"}
         ]"#;
         let snapshot = snapshot(json, &table);
 
@@ -244,10 +244,10 @@ mod tests {
 
     #[test]
     fn duplicate_published_names_are_rejected() {
-        let table = [row("0123500", "石狩市花川")];
+        let table = [row("0999100", "甲野市山川")];
         let json = r#"[
-            {"lat":"43.17","lon":"141.32","name":"石狩市花川","affi":"0"},
-            {"lat":"43.18","lon":"141.33","name":"石狩市花川","affi":"1"}
+            {"lat":"35.12","lon":"135.68","name":"甲野市山川","affi":"0"},
+            {"lat":"35.18","lon":"135.33","name":"甲野市山川","affi":"1"}
         ]"#;
         let err = build(
             json,
@@ -262,8 +262,8 @@ mod tests {
 
     #[test]
     fn malformed_published_coordinates_are_rejected() {
-        let table = [row("0123500", "石狩市花川")];
-        let json = r#"[{"lat":"43.xx","lon":"141.32","name":"石狩市花川","affi":"0"}]"#;
+        let table = [row("0999100", "甲野市山川")];
+        let json = r#"[{"lat":"35.xx","lon":"135.68","name":"甲野市山川","affi":"0"}]"#;
         let err = build(
             json,
             &table,

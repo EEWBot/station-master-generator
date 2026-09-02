@@ -124,7 +124,7 @@ fn optional_kana(value: &str) -> Option<String> {
 
 /// Render a cell as the string the code table means.
 ///
-/// Region codes are stored as numbers, so `100.0` has to come back as `"100"`;
+/// Region codes are stored as numbers, so `100.0` has to come back as `"900"`;
 /// city and point codes are stored as text and keep their leading zeros.
 fn cell_text(cell: Option<&Data>, row: u32, column: u32) -> Result<String> {
     let text = match cell {
@@ -235,65 +235,62 @@ mod tests {
 
     fn data_row(point_code: &str, point_name: &str) -> Vec<Data> {
         text([
-            "100",
-            "石狩地方北部",
-            "いしかりちほうほくぶ",
-            "0123500",
-            "石狩市",
-            "いしかりし",
+            "900",
+            "甲野地方北部",
+            "こうのちほうほくぶ",
+            "0999100",
+            "甲野市",
+            "こうのし",
             point_code,
             point_name,
-            "いしかりしはなかわ",
+            "こうのしやまかわ",
         ])
     }
 
     #[test]
     fn skips_headers_and_normalizes_kana() {
         let mut rows = header();
-        rows.push(data_row("0123500", "石狩市花川"));
+        rows.push(data_row("0999100", "甲野市山川"));
         let parsed = parse_range(&range(&rows)).unwrap();
 
         assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].point_code, "0123500");
-        assert_eq!(parsed[0].point_name, "石狩市花川");
-        assert_eq!(parsed[0].point_kana.as_deref(), Some("イシカリシハナカワ"));
-        assert_eq!(
-            parsed[0].region_kana.as_deref(),
-            Some("イシカリチホウホクブ")
-        );
-        assert_eq!(parsed[0].city_kana.as_deref(), Some("イシカリシ"));
+        assert_eq!(parsed[0].point_code, "0999100");
+        assert_eq!(parsed[0].point_name, "甲野市山川");
+        assert_eq!(parsed[0].point_kana.as_deref(), Some("コウノシヤマカワ"));
+        assert_eq!(parsed[0].region_kana.as_deref(), Some("コウノチホウホクブ"));
+        assert_eq!(parsed[0].city_kana.as_deref(), Some("コウノシ"));
     }
 
     #[test]
     fn numeric_region_codes_become_integer_strings() {
         let mut rows = header();
-        let mut row = data_row("0123500", "石狩市花川");
+        let mut row = data_row("0999100", "甲野市山川");
         // The published workbook stores this column as a number.
-        row[0] = Data::Float(100.0);
+        row[0] = Data::Float(900.0);
         rows.push(row);
 
         let parsed = parse_range(&range(&rows)).unwrap();
-        assert_eq!(parsed[0].region_code, "100");
+        assert_eq!(parsed[0].region_code, "900");
         // Text codes keep their leading zeros.
-        assert_eq!(parsed[0].city_code, "0123500");
+        assert_eq!(parsed[0].city_code, "0999100");
     }
 
     #[test]
     fn a_blank_row_does_not_truncate_the_sheet() {
         let mut rows = header();
-        rows.push(data_row("0123500", "石狩市花川"));
+        rows.push(data_row("0999100", "甲野市山川"));
         rows.push(text([""; COLUMNS as usize]));
-        rows.push(data_row("0123501", "石狩市聚富"));
+        rows.push(data_row("0999101", "甲野市服部"));
 
         let parsed = parse_range(&range(&rows)).unwrap();
         assert_eq!(parsed.len(), 2);
-        assert_eq!(parsed[1].point_code, "0123501");
+        assert_eq!(parsed[1].point_code, "0999101");
     }
 
     #[test]
     fn a_row_missing_only_the_point_code_is_rejected() {
         let mut rows = header();
-        rows.push(data_row("", "石狩市花川"));
+        rows.push(data_row("", "甲野市山川"));
         let err = parse_range(&range(&rows)).unwrap_err().to_string();
         assert!(err.contains("code is empty"), "{err}");
     }
@@ -301,8 +298,8 @@ mod tests {
     #[test]
     fn duplicate_codes_are_rejected() {
         let mut rows = header();
-        rows.push(data_row("0123500", "石狩市花川"));
-        rows.push(data_row("0123500", "石狩市聚富"));
+        rows.push(data_row("0999100", "甲野市山川"));
+        rows.push(data_row("0999100", "甲野市服部"));
         let err = parse_range(&range(&rows)).unwrap_err().to_string();
         assert!(
             err.contains("duplicate PointSeismicIntensity code"),
@@ -313,8 +310,8 @@ mod tests {
     #[test]
     fn duplicate_names_are_rejected() {
         let mut rows = header();
-        rows.push(data_row("0123500", "石狩市花川"));
-        rows.push(data_row("0123501", "石狩市花川"));
+        rows.push(data_row("0999100", "甲野市山川"));
+        rows.push(data_row("0999101", "甲野市山川"));
         let err = parse_range(&range(&rows)).unwrap_err().to_string();
         assert!(
             err.contains("duplicate PointSeismicIntensity name"),

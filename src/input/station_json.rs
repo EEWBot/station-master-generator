@@ -145,11 +145,11 @@ mod tests {
         "version": "20260723",
         "items": [
             {
-                "region": {"code": "100", "name": "石狩地方北部", "kana": "イシカリチホウホクブ"},
-                "city": {"code": "0123500", "name": "石狩市", "kana": "イシカリシ"},
-                "code": "0123500", "name": "石狩市花川", "kana": "イシカリシハナカワ",
+                "region": {"code": "900", "name": "甲野地方北部", "kana": "コウノチホウホクブ"},
+                "city": {"code": "0999100", "name": "甲野市", "kana": "コウノシ"},
+                "code": "0999100", "name": "甲野市山川", "kana": "コウノシヤマカワ",
                 "status": "現", "owner": "気象庁",
-                "latitude": "43.1714", "longitude": "141.3156"
+                "latitude": "35.1234", "longitude": "135.6789"
             }
         ]
     }"#;
@@ -218,14 +218,14 @@ mod tests {
 
     #[test]
     fn blank_coordinates_are_unresolved() {
-        let text = MINIMAL.replace(r#""latitude": "43.1714""#, r#""latitude": """#);
+        let text = MINIMAL.replace(r#""latitude": "35.1234""#, r#""latitude": """#);
         let snapshot = parse(&text, &Overrides::default()).unwrap();
         assert!(snapshot.stations[0].metadata.location.is_none());
     }
 
     #[test]
     fn malformed_coordinates_are_rejected() {
-        let text = MINIMAL.replace(r#""latitude": "43.1714""#, r#""latitude": "43.xxxx""#);
+        let text = MINIMAL.replace(r#""latitude": "35.1234""#, r#""latitude": "35.xxxx""#);
         let err = parse(&text, &Overrides::default()).unwrap_err().to_string();
         assert!(err.contains("malformed latitude"), "{err}");
     }

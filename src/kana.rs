@@ -26,7 +26,7 @@ mod tests {
 
     #[test]
     fn converts_plain_hiragana() {
-        assert_eq!(to_katakana("いしかりしはなかわ"), "イシカリシハナカワ");
+        assert_eq!(to_katakana("こうのしやまかわ"), "コウノシヤマカワ");
     }
 
     #[test]
@@ -35,13 +35,13 @@ mod tests {
             to_katakana("しんしのつむらだいよんじゅうななせん"),
             "シンシノツムラダイヨンジュウナナセン"
         );
-        assert_eq!(to_katakana("いしかりしばんなぐろ"), "イシカリシバンナグロ");
+        assert_eq!(to_katakana("こうのしばんなぐろ"), "コウノシバンナグロ");
     }
 
     #[test]
     fn leaves_katakana_and_other_characters_untouched() {
-        assert_eq!(to_katakana("イシカリシハナカワ"), "イシカリシハナカワ");
-        assert_eq!(to_katakana("ABC 123 石狩市"), "ABC 123 石狩市");
+        assert_eq!(to_katakana("コウノシヤマカワ"), "コウノシヤマカワ");
+        assert_eq!(to_katakana("ABC 123 甲野市"), "ABC 123 甲野市");
     }
 
     #[test]
@@ -51,7 +51,7 @@ mod tests {
 
     #[test]
     fn is_idempotent() {
-        let once = to_katakana("いしかりしはなかわ");
+        let once = to_katakana("こうのしやまかわ");
         assert_eq!(to_katakana(&once), once);
     }
 }
