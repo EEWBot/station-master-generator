@@ -174,6 +174,66 @@ fn an_existing_output_is_never_overwritten() {
 }
 
 #[test]
+fn an_existing_report_is_never_overwritten() {
+    let dir = workspace("no-report-overwrite");
+    let master = dir.join("master.json");
+    let next = dir.join("next.json");
+
+    assert!(init_from_station_json(&master).status.success());
+    let before = std::fs::read_to_string(&master).unwrap();
+
+    // A report path aimed at a master would destroy it as thoroughly as an output
+    // path would, so it is refused on the same terms.
+    let output = run(&[
+        "update",
+        "--previous",
+        master.to_str().unwrap(),
+        "--station-json",
+        fixture("station_min_v2.json").to_str().unwrap(),
+        "--output",
+        next.to_str().unwrap(),
+        "--report",
+        master.to_str().unwrap(),
+        "--generated-at",
+        GENERATED_AT,
+    ]);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("already exists"),
+        "{}",
+        stderr(&output)
+    );
+    assert_eq!(std::fs::read_to_string(&master).unwrap(), before);
+    // The refusal comes before any work, so no master is produced either.
+    assert!(!next.exists(), "nothing is written on failure");
+}
+
+#[test]
+fn a_report_may_not_share_the_output_path() {
+    let dir = workspace("report-is-output");
+    let master = dir.join("master.json");
+
+    // Neither path exists yet, so only comparing the two catches this. The report
+    // is written after the master and would land on top of it.
+    let output = run(&[
+        "init",
+        "--station-json",
+        fixture("station_min.json").to_str().unwrap(),
+        "--output",
+        master.to_str().unwrap(),
+        "--report",
+        master.to_str().unwrap(),
+        "--generated-at",
+        GENERATED_AT,
+    ]);
+
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("same path"), "{}", stderr(&output));
+    assert!(!master.exists(), "nothing is written on failure");
+}
+
+#[test]
 fn resupplying_a_recorded_release_is_refused() {
     let dir = workspace("repeat-release");
     let first = dir.join("first.json");

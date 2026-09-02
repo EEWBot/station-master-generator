@@ -162,15 +162,31 @@ pub fn run(cli: Cli) -> Result<()> {
         } => (source, output, Some(previous.as_path())),
     };
 
-    // The tool never writes over a master. The intended flow is to produce a new
-    // file, read the report, and promote it deliberately; canonical indices are not
-    // something to overwrite on the strength of a command line flag.
-    if output.output.exists() {
-        bail!(
-            "{} already exists\n  \
-             write to a new path and promote it once you have checked the report",
-            output.output.display()
-        );
+    // The tool never writes over a file it was not asked to create. The intended
+    // flow is to produce a new master, read the report, and promote it deliberately;
+    // canonical indices are not something to overwrite on the strength of a command
+    // line flag. The report is held to the same rule, because a report path aimed at
+    // a master would destroy one just as thoroughly.
+    refuse_existing(
+        &output.output,
+        "write the master to a new path and promote it once you have checked the report",
+    )?;
+    if let Some(report) = &output.report {
+        refuse_existing(
+            report,
+            "give the report a path of its own; written over a master it would destroy it",
+        )?;
+
+        // The output does not exist yet, so the check above cannot catch the two
+        // naming the same file. The report is written last, so it would land on the
+        // master that had just been produced.
+        if absolute(report)? == absolute(&output.output)? {
+            bail!(
+                "--report and --output are the same path ({})\n  \
+                 the report would be written over the master",
+                output.output.display()
+            );
+        }
     }
 
     let previous = previous_path.map(read_master).transpose()?;
@@ -186,6 +202,24 @@ pub fn run(cli: Cli) -> Result<()> {
 
     eprint!("{}", report::to_text(&summary));
     Ok(())
+}
+
+/// Refuse a path that is already taken, with advice for the file that was bound
+/// for it.
+fn refuse_existing(path: &Path, advice: &str) -> Result<()> {
+    if path.exists() {
+        bail!("{} already exists\n  {advice}", path.display());
+    }
+    Ok(())
+}
+
+/// Absolute form of `path`, for comparing two paths that need not both exist.
+///
+/// Symlinks are not resolved, so this is one layer of the defence rather than the
+/// whole of it; the existence checks and the report's own `create_new` cover what
+/// it cannot see.
+fn absolute(path: &Path) -> Result<PathBuf> {
+    std::path::absolute(path).with_context(|| format!("resolving {}", path.display()))
 }
 
 fn read_master(path: &Path) -> Result<Master> {

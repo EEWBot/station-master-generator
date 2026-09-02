@@ -7,6 +7,7 @@
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::fmt::Write as _;
+use std::io::Write as _;
 use std::path::Path;
 
 use crate::append::AppendReport;
@@ -169,7 +170,19 @@ pub fn to_json(report: &AppendReport) -> String {
     text
 }
 
+/// Write the report, refusing a path that is already taken.
+///
+/// The caller checks the path before doing any work, so this is the second layer:
+/// it closes the window between that check and this write, and it holds for any
+/// other caller that has not checked at all. A report aimed at a master would
+/// destroy it, so the refusal belongs at the write itself as well.
 pub fn write_json(report: &AppendReport, path: &Path) -> Result<()> {
-    std::fs::write(path, to_json(report))
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .with_context(|| format!("creating report at {}", path.display()))?;
+
+    file.write_all(to_json(report).as_bytes())
         .with_context(|| format!("writing report to {}", path.display()))
 }
