@@ -110,6 +110,41 @@ jobs:
       - name: Build
         run: cargo build --locked --release --target ${{ matrix.target }}
 
+      - name: Smoke test
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          bin="target/${{ matrix.target }}/release/${{ matrix.binary }}"
+
+          "${bin}" --help
+
+          binary_version="$("${bin}" --version | awk '{ print $2 }')"
+
+          if [ "v${binary_version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Binary reports ${binary_version} but tag is ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+
+      - name: Smoke test
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bin = "target/${{ matrix.target }}/release/${{ matrix.binary }}"
+
+          & $bin --help
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::error::--help exited with ${LASTEXITCODE}"
+            exit 1
+          }
+
+          $binaryVersion = (& $bin --version).Split(' ')[1]
+
+          if ("v${binaryVersion}" -ne $env:GITHUB_REF_NAME) {
+            Write-Output "::error::Binary reports ${binaryVersion} but tag is $env:GITHUB_REF_NAME"
+            exit 1
+          }
+
       - name: Package Unix
         if: runner.os != 'Windows'
         shell: bash

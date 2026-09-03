@@ -13,6 +13,7 @@ use crate::{report, validate};
 #[derive(Debug, Parser)]
 #[command(
     name = "jma-station-master",
+    version,
     about = "Build and extend a canonical JMA seismic intensity station master",
     long_about = "Converts JMA seismic intensity station information into a canonical JSON \
                   master. The offset of a station in the `stations` array is its permanent \
