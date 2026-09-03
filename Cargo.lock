@@ -344,6 +344,7 @@ dependencies = [
  "calamine",
  "chrono",
  "clap",
+ "rust_xlsxwriter",
  "serde",
  "serde_json",
  "thiserror",
@@ -431,6 +432,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
 dependencies = [
  "proc-macro2",
+]
+
+[[package]]
+name = "rust_xlsxwriter"
+version = "0.99.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c073c0bd3868defc46035bf95b2e70389cefc59c528b8674fe90594c9c2b3f6f"
+dependencies = [
+ "zip",
 ]
 
 [[package]]

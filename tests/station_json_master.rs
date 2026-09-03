@@ -3,7 +3,7 @@
 mod common;
 
 use chrono::{DateTime, FixedOffset};
-use common::{apply, at, index_of, station, station_snapshot};
+use common::{CodeTable, apply, at, index_of, station, station_snapshot};
 use jma_station_master::append::append;
 use jma_station_master::model::{Provider, SourceKind};
 
@@ -256,7 +256,7 @@ fn index_count_tracks_the_table_and_never_shrinks() {
 #[test]
 fn a_master_cannot_change_source_kind() {
     let (from_station_json, _) = apply(None, &station_snapshot("station_min.json"));
-    let public = common::public_snapshot("stations_min.json", "code_table_min.xls", "20260723", R3);
+    let public = common::public_snapshot("stations_min.json", CodeTable::Min, "20260723", R3);
 
     let error = append(Some(&from_station_json), &public, stamp())
         .unwrap_err()

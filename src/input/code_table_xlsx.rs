@@ -1,7 +1,7 @@
-//! Reader for sheet "24" of 地震火山関連コード表.xls.
+//! Reader for sheet "24" of 地震火山関連コード表.xlsx.
 //!
-//! The file is legacy BIFF8, so `calamine`'s `Xls` reader handles it directly; no
-//! external converter is involved.
+//! `calamine`'s `Xlsx` reader handles the published workbook directly; no external
+//! converter is involved.
 //!
 //! Sheet layout, as measured on the published workbook:
 //!
@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
-use calamine::{Data, Range, Reader, Xls};
+use calamine::{Data, Range, Reader, Xlsx};
 
 use crate::code::CodeShape;
 use crate::kana;
@@ -53,7 +53,7 @@ pub struct CodeTableRow {
 }
 
 pub fn load(path: &Path) -> Result<Vec<CodeTableRow>> {
-    let mut workbook: Xls<_> = calamine::open_workbook(path)
+    let mut workbook: Xlsx<_> = calamine::open_workbook(path)
         .with_context(|| format!("opening code table at {}", path.display()))?;
     let range = workbook
         .worksheet_range(SHEET_NAME)

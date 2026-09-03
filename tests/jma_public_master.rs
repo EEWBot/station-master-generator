@@ -3,7 +3,7 @@
 
 mod common;
 
-use common::{apply, at, public_snapshot, station};
+use common::{CodeTable, apply, at, public_snapshot, station};
 use jma_station_master::append::append;
 use jma_station_master::model::{Provider, Scope, SourceKind};
 
@@ -11,13 +11,13 @@ const R1: &str = "2026-03-12T12:00:00+09:00";
 const R2: &str = "2026-07-23T12:00:00+09:00";
 
 fn initial() -> jma_station_master::model::Master {
-    let snapshot = public_snapshot("stations_min.json", "code_table_min.xls", "20260312", R1);
+    let snapshot = public_snapshot("stations_min.json", CodeTable::Min, "20260312", R1);
     apply(None, &snapshot).0
 }
 
 #[test]
 fn the_code_table_supplies_identity_and_the_feed_supplies_coordinates() {
-    let snapshot = public_snapshot("stations_min.json", "code_table_min.xls", "20260312", R1);
+    let snapshot = public_snapshot("stations_min.json", CodeTable::Min, "20260312", R1);
     let (master, report) = apply(None, &snapshot);
 
     assert_eq!(master.source_kind, SourceKind::JmaPublic);
@@ -65,7 +65,7 @@ fn a_station_the_feed_does_not_name_keeps_its_index_without_a_location() {
 
 #[test]
 fn the_report_separates_unresolved_from_out_of_scope() {
-    let snapshot = public_snapshot("stations_min.json", "code_table_min.xls", "20260312", R1);
+    let snapshot = public_snapshot("stations_min.json", CodeTable::Min, "20260312", R1);
     let (_, report) = apply(None, &snapshot);
 
     assert_eq!(report.unresolved_active, 1);
@@ -83,7 +83,7 @@ fn a_failed_join_alone_does_not_erase_a_known_location() {
 
     // The later feed no longer lists 甲野市月見, but the code table still names it
     // exactly as before, so it is recognisably the same station.
-    let snapshot = public_snapshot("stations_min_v2.json", "code_table_min.xls", "20260723", R2);
+    let snapshot = public_snapshot("stations_min_v2.json", CodeTable::Min, "20260723", R2);
     let (second, _) = apply(Some(&first), &snapshot);
 
     let tsukimi = station(&second, "0999120");
@@ -101,12 +101,7 @@ fn a_renamed_station_with_no_join_becomes_unresolved() {
 
     // Here the code table renames 甲野市月見 and the feed cannot be joined, so the
     // old coordinate might belong to the old site.
-    let snapshot = public_snapshot(
-        "stations_min_v2.json",
-        "code_table_min_renamed.xls",
-        "20260723",
-        R2,
-    );
+    let snapshot = public_snapshot("stations_min_v2.json", CodeTable::Renamed, "20260723", R2);
     let (second, _) = apply(Some(&first), &snapshot);
 
     let renamed = station(&second, "0999120");
@@ -121,12 +116,7 @@ fn a_renamed_station_with_no_join_becomes_unresolved() {
 #[test]
 fn leaving_the_code_table_retires_the_scope_and_nothing_else() {
     let first = initial();
-    let snapshot = public_snapshot(
-        "stations_min_v2.json",
-        "code_table_min_shrunk.xls",
-        "20260723",
-        R2,
-    );
+    let snapshot = public_snapshot("stations_min_v2.json", CodeTable::Shrunk, "20260723", R2);
     // A departure is an ordinary part of an update; no flag stands in the way.
     let (second, report) = apply(Some(&first), &snapshot);
 
@@ -154,12 +144,7 @@ fn departures_are_named_in_the_report() {
     // Nothing refuses a truncated code table, so the report is the whole audit
     // trail: it has to say which stations left, not just how many.
     let first = initial();
-    let snapshot = public_snapshot(
-        "stations_min_v2.json",
-        "code_table_min_shrunk.xls",
-        "20260723",
-        R2,
-    );
+    let snapshot = public_snapshot("stations_min_v2.json", CodeTable::Shrunk, "20260723", R2);
     let (_, report) = apply(Some(&first), &snapshot);
 
     let summary = &report.scopes[&Scope::PointSeismicIntensity];
@@ -173,7 +158,7 @@ fn a_quiet_release_still_reports_the_scope() {
     // A release where nothing enters or leaves must still produce the scope line,
     // so an anomalous run stands out against a familiar shape.
     let first = initial();
-    let snapshot = public_snapshot("stations_min_v2.json", "code_table_min.xls", "20260723", R2);
+    let snapshot = public_snapshot("stations_min_v2.json", CodeTable::Min, "20260723", R2);
     let (_, report) = apply(Some(&first), &snapshot);
 
     let summary = &report.scopes[&Scope::PointSeismicIntensity];
@@ -185,7 +170,7 @@ fn a_quiet_release_still_reports_the_scope() {
 #[test]
 fn resupplying_a_recorded_release_is_an_error() {
     let first = initial();
-    let snapshot = public_snapshot("stations_min.json", "code_table_min.xls", "20260312", R1);
+    let snapshot = public_snapshot("stations_min.json", CodeTable::Min, "20260312", R1);
 
     let error = append(Some(&first), &snapshot, at(common::GENERATED_AT))
         .unwrap_err()

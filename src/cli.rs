@@ -54,18 +54,18 @@ pub struct SourceArgs {
     #[arg(long, value_name = "PATH", group = "source")]
     pub station_json: Option<PathBuf>,
 
-    /// Published stations.json. Requires --code-table-xls.
+    /// Published stations.json. Requires --code-table-xlsx.
     #[arg(
         long,
         value_name = "PATH",
         group = "source",
-        requires = "code_table_xls"
+        requires = "code_table_xlsx"
     )]
     pub stations_json: Option<PathBuf>,
 
-    /// 地震火山関連コード表.xls, read from sheet "24".
+    /// 地震火山関連コード表.xlsx, read from sheet "24".
     #[arg(long, value_name = "PATH", requires = "stations_json")]
-    pub code_table_xls: Option<PathBuf>,
+    pub code_table_xlsx: Option<PathBuf>,
 
     /// Release identifier. Required for the published feed; overrides
     /// station.json's own `version` when given.
@@ -120,10 +120,10 @@ impl SourceArgs {
             );
         }
 
-        let (Some(stations_json), Some(code_table_xls)) =
-            (&self.stations_json, &self.code_table_xls)
+        let (Some(stations_json), Some(code_table_xlsx)) =
+            (&self.stations_json, &self.code_table_xlsx)
         else {
-            bail!("either --station-json or --stations-json with --code-table-xls is required");
+            bail!("either --station-json or --stations-json with --code-table-xlsx is required");
         };
 
         // The published feed carries no release stamp of its own, so the operator
@@ -140,7 +140,7 @@ impl SourceArgs {
             );
         };
 
-        jma_public::load(stations_json, code_table_xls, release_id, effective_from)
+        jma_public::load(stations_json, code_table_xlsx, release_id, effective_from)
     }
 }
 

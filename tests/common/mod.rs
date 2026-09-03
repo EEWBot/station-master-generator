@@ -10,6 +10,10 @@ use jma_station_master::append::{AppendReport, append};
 use jma_station_master::input::{Snapshot, jma_public, station_json};
 use jma_station_master::model::Master;
 
+mod code_table;
+
+pub use code_table::{CodeTable, code_table};
+
 /// A fixed stamp so every produced master is byte-for-byte comparable.
 pub const GENERATED_AT: &str = "2026-08-28T03:00:00+09:00";
 
@@ -30,13 +34,13 @@ pub fn station_snapshot(name: &str) -> Snapshot {
 
 pub fn public_snapshot(
     stations_json: &str,
-    code_table: &str,
+    table: CodeTable,
     release_id: &str,
     effective_from: &str,
 ) -> Snapshot {
     jma_public::load(
         &fixture(stations_json),
-        &fixture(code_table),
+        &code_table(table),
         release_id.to_owned(),
         at(effective_from),
     )

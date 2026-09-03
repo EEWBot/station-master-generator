@@ -4,7 +4,7 @@
 //! `merge`, so the merge rules never learn what a spreadsheet or a JSON feed
 //! looks like.
 
-pub mod code_table_xls;
+pub mod code_table_xlsx;
 pub mod jma_public;
 pub mod station_json;
 

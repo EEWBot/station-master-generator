@@ -13,7 +13,7 @@ use anyhow::{Context, Result, bail};
 use chrono::{DateTime, FixedOffset};
 use serde::Deserialize;
 
-use super::code_table_xls::{self, CodeTableRow};
+use super::code_table_xlsx::{self, CodeTableRow};
 use super::{
     RawCoordinate, Snapshot, SnapshotStation, StationMetadata, Warning, parse_coordinate_pair,
 };
@@ -36,13 +36,13 @@ struct PublicEntry {
 
 pub fn load(
     stations_json: &Path,
-    code_table_xls: &Path,
+    code_table_xlsx: &Path,
     release_id: String,
     effective_from: DateTime<FixedOffset>,
 ) -> Result<Snapshot> {
     let text = std::fs::read_to_string(stations_json)
         .with_context(|| format!("reading stations.json at {}", stations_json.display()))?;
-    let code_table = code_table_xls::load(code_table_xls)?;
+    let code_table = code_table_xlsx::load(code_table_xlsx)?;
     build(&text, &code_table, release_id, effective_from)
 }
 
@@ -156,7 +156,7 @@ fn parse_affiliation(affi: Option<&str>) -> Provider {
 #[cfg(test)]
 mod tests {
     use super::{build, parse_affiliation};
-    use crate::input::code_table_xls::CodeTableRow;
+    use crate::input::code_table_xlsx::CodeTableRow;
     use crate::model::{Provider, Scope};
     use chrono::DateTime;
 

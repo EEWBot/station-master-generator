@@ -5,7 +5,7 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use common::{GENERATED_AT, fixture};
+use common::{CodeTable, GENERATED_AT, code_table, fixture};
 
 const BIN: &str = env!("CARGO_BIN_EXE_jma-station-master");
 
@@ -47,8 +47,8 @@ fn init_writes_a_master_and_prints_a_summary() {
         "init",
         "--stations-json",
         fixture("stations_min.json").to_str().unwrap(),
-        "--code-table-xls",
-        fixture("code_table_min.xls").to_str().unwrap(),
+        "--code-table-xlsx",
+        code_table(CodeTable::Min).to_str().unwrap(),
         "--release-id",
         "20260312",
         "--effective-from",
@@ -95,15 +95,15 @@ fn departures_are_reported_in_full() {
     let report_path = dir.join("report.json");
 
     let stations = fixture("stations_min.json");
-    let full_table = fixture("code_table_min.xls");
-    let shrunk_table = fixture("code_table_min_shrunk.xls");
+    let full_table = code_table(CodeTable::Min);
+    let shrunk_table = code_table(CodeTable::Shrunk);
     let second = dir.join("second.json");
 
     let init = run(&[
         "init",
         "--stations-json",
         stations.to_str().unwrap(),
-        "--code-table-xls",
+        "--code-table-xlsx",
         full_table.to_str().unwrap(),
         "--release-id",
         "20260312",
@@ -123,7 +123,7 @@ fn departures_are_reported_in_full() {
         first.to_str().unwrap(),
         "--stations-json",
         stations.to_str().unwrap(),
-        "--code-table-xls",
+        "--code-table-xlsx",
         shrunk_table.to_str().unwrap(),
         "--release-id",
         "20260723",
@@ -325,8 +325,8 @@ fn a_master_may_not_be_updated_from_a_different_source() {
         master.to_str().unwrap(),
         "--stations-json",
         fixture("stations_min.json").to_str().unwrap(),
-        "--code-table-xls",
-        fixture("code_table_min.xls").to_str().unwrap(),
+        "--code-table-xlsx",
+        code_table(CodeTable::Min).to_str().unwrap(),
         "--release-id",
         "20260723",
         "--effective-from",
@@ -357,8 +357,8 @@ fn the_published_feed_requires_an_explicit_release() {
         "init",
         "--stations-json",
         fixture("stations_min.json").to_str().unwrap(),
-        "--code-table-xls",
-        fixture("code_table_min.xls").to_str().unwrap(),
+        "--code-table-xlsx",
+        code_table(CodeTable::Min).to_str().unwrap(),
         "--output",
         dir.join("out.json").to_str().unwrap(),
     ]);
@@ -386,7 +386,7 @@ fn the_published_feed_requires_the_code_table() {
 
     assert!(!output.status.success());
     assert!(
-        stderr(&output).contains("--code-table-xls"),
+        stderr(&output).contains("--code-table-xlsx"),
         "{}",
         stderr(&output)
     );
