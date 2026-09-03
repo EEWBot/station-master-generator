@@ -1,0 +1,178 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Get Rust toolchain
+        id: toolchain
+        run: |
+          awk -F'[ ="]+' '$1 == "channel" { print "toolchain=" $2 }' rust-toolchain >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ steps.toolchain.outputs.toolchain }}
+
+      - uses: Swatinem/rust-cache@v2.9.2
+
+      - name: Verify tag matches Cargo.toml
+        run: |
+          cargo_version="$(
+            cargo metadata --no-deps --format-version 1 |
+              jq -r '.packages[] | select(.name == "jma-station-master") | .version'
+          )"
+
+          expected_tag="v${cargo_version}"
+
+          if [ "${GITHUB_REF_NAME}" != "${expected_tag}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match Cargo.toml version ${cargo_version}"
+            exit 1
+          fi
+
+      - name: Test
+        run: cargo test --locked --all-features
+
+
+  build:
+    needs: verify
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+            binary: jma-station-master
+
+          - name: linux-aarch64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            binary: jma-station-master
+
+          - name: windows-x86_64
+            runner: windows-2025
+            target: x86_64-pc-windows-msvc
+            binary: jma-station-master.exe
+
+          - name: macos-aarch64
+            runner: macos-15
+            target: aarch64-apple-darwin
+            binary: jma-station-master
+
+          - name: macos-x86_64
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+            binary: jma-station-master
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Get Rust toolchain
+        id: toolchain
+        shell: bash
+        run: |
+          awk -F'[ ="]+' '$1 == "channel" { print "toolchain=" $2 }' rust-toolchain >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ steps.toolchain.outputs.toolchain }}
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install musl tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Build
+        run: cargo build --locked --release --target ${{ matrix.target }}
+
+      - name: Package Unix
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          archive="jma-station-master-${GITHUB_REF_NAME}-${{ matrix.name }}.tar.gz"
+
+          mkdir package
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" package/
+
+          tar -C package -czf "${archive}" "${{ matrix.binary }}"
+
+      - name: Package Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = "jma-station-master-${env:GITHUB_REF_NAME}-${{ matrix.name }}.zip"
+
+          New-Item -ItemType Directory -Path package
+          Copy-Item `
+            "target/${{ matrix.target }}/release/${{ matrix.binary }}" `
+            "package/${{ matrix.binary }}"
+
+          Compress-Archive `
+            -Path "package/${{ matrix.binary }}" `
+            -DestinationPath $archive
+
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: release-${{ matrix.name }}
+          path: |
+            jma-station-master-*.tar.gz
+            jma-station-master-*.zip
+          if-no-files-found: error
+
+
+  release:
+    needs:
+      - verify
+      - build
+
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum jma-station-master-* > SHA256SUMS
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            dist/* \
+            --verify-tag \
+            --generate-notes
