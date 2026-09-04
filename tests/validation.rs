@@ -176,13 +176,11 @@ fn out_of_range_coordinates_are_rejected() {
     master.stations[0].metadata[0].location = Some(Location {
         latitude: 91.0,
         longitude: 181.0,
-        resolution_deg: 0.0,
     });
 
     let text = message(&validate(&master, None).unwrap_err());
     assert!(text.contains("outside -90..=90"), "{text}");
     assert!(text.contains("outside -180..=180"), "{text}");
-    assert!(text.contains("finite and positive"), "{text}");
 }
 
 #[test]

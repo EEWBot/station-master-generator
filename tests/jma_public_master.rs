@@ -36,7 +36,7 @@ fn the_code_table_supplies_identity_and_the_feed_supplies_coordinates() {
 
     let location = revision.location.unwrap();
     assert!((location.latitude - 35.12).abs() < 1e-12);
-    assert!((location.resolution_deg - 0.01).abs() < 1e-12);
+    assert!((location.longitude - 135.68).abs() < 1e-12);
 
     assert_eq!(
         yamakawa.scope_events.len(),

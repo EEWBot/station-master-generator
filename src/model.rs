@@ -12,8 +12,8 @@ pub const SCHEMA_VERSION: u32 = 1;
 /// Which input format a master was created from.
 ///
 /// A master is pinned to one source kind for its whole life: mixing sources would
-/// require reconciling differing coordinate precision and identity fields across
-/// providers, which this tool deliberately does not do.
+/// require reconciling identity fields across providers, which this tool
+/// deliberately does not do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceKind {
@@ -84,11 +84,6 @@ pub struct Area {
 pub struct Location {
     pub latitude: f64,
     pub longitude: f64,
-    /// Size of the quantization cell the coordinate was reported in.
-    ///
-    /// `35.12` from a two-decimal source means "somewhere in [35.115, 35.125)",
-    /// not "exactly 35.12". See [`crate::location`].
-    pub resolution_deg: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

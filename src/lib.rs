@@ -15,7 +15,6 @@ pub mod cli;
 pub mod code;
 pub mod input;
 pub mod kana;
-pub mod location;
 pub mod model;
 pub mod report;
 pub mod validate;

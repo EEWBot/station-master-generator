@@ -80,9 +80,7 @@ pub struct Snapshot {
 /// A coordinate as the feed wrote it.
 ///
 /// The published feed quotes most coordinates but emits a minority of them as bare
-/// JSON numbers, so both spellings have to be accepted. The written form is kept
-/// rather than only the parsed value, because the number of decimals is itself
-/// information: it says how precisely the publisher pinned the location down.
+/// JSON numbers, so both spellings have to be accepted before the value is parsed.
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(untagged)]
 pub(crate) enum RawCoordinate {
@@ -91,7 +89,7 @@ pub(crate) enum RawCoordinate {
 }
 
 impl RawCoordinate {
-    pub(crate) fn as_written(&self) -> String {
+    pub(crate) fn as_text(&self) -> String {
         match self {
             Self::Text(text) => text.trim().to_owned(),
             Self::Number(number) => number.to_string(),
@@ -115,12 +113,7 @@ fn parse_axis(text: &str, axis: &str, subject: &str) -> anyhow::Result<Option<f6
     Ok(Some(value))
 }
 
-/// Parse a coordinate pair, recovering the precision from how it was written.
-///
-/// The pair is only as well determined as its coarser axis, so the two decimal
-/// counts are combined by taking the larger cell. That also keeps a bare number
-/// such as `135.70499999999998` from claiming a precision its companion latitude
-/// `"35.42"` plainly does not have.
+/// Parse a coordinate pair.
 ///
 /// A missing coordinate is unresolved; a present but unparsable one is a corrupt
 /// feed and must not be quietly turned into `null`, or a broken export could erase
@@ -132,8 +125,8 @@ pub(crate) fn parse_coordinate_pair(
     longitude: Option<&RawCoordinate>,
     subject: &str,
 ) -> anyhow::Result<Option<Location>> {
-    let lat_text = latitude.map(RawCoordinate::as_written).unwrap_or_default();
-    let lon_text = longitude.map(RawCoordinate::as_written).unwrap_or_default();
+    let lat_text = latitude.map(RawCoordinate::as_text).unwrap_or_default();
+    let lon_text = longitude.map(RawCoordinate::as_text).unwrap_or_default();
 
     let latitude = parse_axis(&lat_text, "latitude", subject)?;
     let longitude = parse_axis(&lon_text, "longitude", subject)?;
@@ -145,27 +138,12 @@ pub(crate) fn parse_coordinate_pair(
     Ok(Some(Location {
         latitude,
         longitude,
-        resolution_deg: resolution_from_decimals(&lat_text)
-            .max(resolution_from_decimals(&lon_text)),
     }))
-}
-
-/// Count decimal places in a coordinate as written, to recover the precision the
-/// publisher actually committed to.
-///
-/// `"35.12"` is a claim about two decimals; parsing it to `35.12_f64` first would
-/// lose exactly the fact we need.
-pub(crate) fn resolution_from_decimals(text: &str) -> f64 {
-    let decimals = match text.split_once('.') {
-        Some((_, frac)) => frac.chars().filter(char::is_ascii_digit).count(),
-        None => 0,
-    };
-    10f64.powi(-(decimals as i32))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{RawCoordinate, parse_coordinate_pair, resolution_from_decimals};
+    use super::{RawCoordinate, parse_coordinate_pair};
 
     fn text(value: &str) -> RawCoordinate {
         RawCoordinate::Text(value.to_owned())
@@ -176,25 +154,9 @@ mod tests {
     }
 
     #[test]
-    fn resolution_follows_written_precision() {
-        assert!((resolution_from_decimals("35.1234") - 0.0001).abs() < 1e-12);
-        assert!((resolution_from_decimals("35.12") - 0.01).abs() < 1e-12);
-        assert!((resolution_from_decimals("43") - 1.0).abs() < 1e-12);
-        assert!((resolution_from_decimals("-135.6789") - 0.0001).abs() < 1e-12);
-    }
-
-    #[test]
-    fn a_pair_is_only_as_precise_as_its_coarser_axis() {
-        let location = parse_coordinate_pair(Some(&text("35.1234")), Some(&text("135.68")), "s")
-            .unwrap()
-            .unwrap();
-        assert!((location.resolution_deg - 0.01).abs() < 1e-12);
-    }
-
-    #[test]
-    fn bare_numbers_are_accepted_without_inflating_precision() {
-        // The published feed quotes most coordinates but not all; a stray number
-        // must not make the pair look far more precise than the latitude allows.
+    fn bare_numbers_are_accepted() {
+        // The published feed quotes most coordinates but not all, so an unquoted
+        // axis has to parse to the same value a quoted one would.
         let location = parse_coordinate_pair(
             Some(&text("35.36")),
             Some(&number(135.704_999_999_999_98)),
@@ -202,8 +164,8 @@ mod tests {
         )
         .unwrap()
         .unwrap();
+        assert!((location.latitude - 35.36).abs() < 1e-9);
         assert!((location.longitude - 135.705).abs() < 1e-9);
-        assert!((location.resolution_deg - 0.01).abs() < 1e-12);
     }
 
     #[test]

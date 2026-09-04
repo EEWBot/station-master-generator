@@ -24,7 +24,6 @@ use anyhow::{Result, bail};
 use chrono::{DateTime, FixedOffset};
 
 use crate::input::{Snapshot, StationMetadata, Warning};
-use crate::location;
 use crate::model::{
     LifecycleEvent, Master, MetadataRevision, Provider, Release, Scope, ScopeEvent, SourceKind,
     Station,
@@ -359,7 +358,7 @@ fn same_metadata(a: &MetadataRevision, b: &MetadataRevision) -> bool {
         && a.city == b.city
         && a.provider == b.provider
         && a.provider_detail == b.provider_detail
-        && location::same_place(a.location.as_ref(), b.location.as_ref())
+        && a.location == b.location
 }
 
 fn apply_lifecycle(

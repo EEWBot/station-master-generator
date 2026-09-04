@@ -199,7 +199,7 @@ mod tests {
 
         let location = snapshot.stations[0].metadata.location.unwrap();
         assert!((location.latitude - 35.12).abs() < 1e-12);
-        assert!((location.resolution_deg - 0.01).abs() < 1e-12);
+        assert!((location.longitude - 135.68).abs() < 1e-12);
         assert_eq!(snapshot.stations[0].metadata.provider, Provider::Jma);
         assert!(snapshot.warnings.is_empty());
     }

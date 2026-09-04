@@ -205,10 +205,11 @@ mod tests {
     }
 
     #[test]
-    fn derives_resolution_from_written_precision() {
+    fn reads_the_coordinate() {
         let snapshot = parse(MINIMAL, &Overrides::default()).unwrap();
         let location = snapshot.stations[0].metadata.location.unwrap();
-        assert!((location.resolution_deg - 0.0001).abs() < 1e-12);
+        assert!((location.latitude - 35.1234).abs() < 1e-12);
+        assert!((location.longitude - 135.6789).abs() < 1e-12);
     }
 
     #[test]

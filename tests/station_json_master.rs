@@ -111,31 +111,6 @@ fn a_changed_name_appends_a_revision_and_an_unchanged_one_does_not() {
 }
 
 #[test]
-fn a_finer_reading_of_the_same_site_is_not_a_change() {
-    // The first release reported 甲野市山川 to two decimals.
-    let (coarse, _) = apply(None, &station_snapshot("station_min_coarse.json"));
-    let recorded = station(&coarse, "0999100").metadata[0].location.unwrap();
-    assert!((recorded.resolution_deg - 0.01).abs() < 1e-12);
-
-    // The next reports it to four, but inside the same cell: the station did not
-    // move, only the publisher's precision did.
-    let (fine, report) = apply(Some(&coarse), &station_snapshot("station_min.json"));
-
-    assert_eq!(report.metadata_revised, 0);
-    assert_eq!(report.metadata_unchanged, 5);
-
-    let unchanged = station(&fine, "0999100");
-    assert_eq!(
-        unchanged.metadata.len(),
-        1,
-        "nothing changed, nothing added"
-    );
-    let location = unchanged.metadata[0].location.unwrap();
-    assert!((location.latitude - 35.12).abs() < 1e-12);
-    assert!((location.resolution_deg - 0.01).abs() < 1e-12);
-}
-
-#[test]
 fn a_real_relocation_appends_a_revision() {
     let (first, _) = apply(None, &station_snapshot("station_min.json"));
     let (second, _) = apply(Some(&first), &station_snapshot("station_min_v2.json"));
@@ -231,7 +206,7 @@ fn a_release_id_cannot_be_reused_for_a_different_release() {
 #[test]
 fn releases_must_arrive_oldest_first() {
     let (later, _) = apply(None, &station_snapshot("station_min.json"));
-    let earlier = station_snapshot("station_min_coarse.json");
+    let earlier = station_snapshot("station_min_earlier.json");
 
     let error = append(Some(&later), &earlier, stamp())
         .unwrap_err()

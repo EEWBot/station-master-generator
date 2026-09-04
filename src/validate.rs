@@ -234,12 +234,6 @@ fn check_station_histories(master: &Master, errors: &mut Vec<ValidationError>) {
                     location.longitude
                 ))));
             }
-            if !(location.resolution_deg.is_finite() && location.resolution_deg > 0.0) {
-                errors.push(error(at(&format!(
-                    "has resolution_deg {}, which must be finite and positive",
-                    location.resolution_deg
-                ))));
-            }
         }
 
         for window in station.lifecycle.windows(2) {
